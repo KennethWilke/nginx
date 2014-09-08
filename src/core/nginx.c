@@ -1033,16 +1033,28 @@ ngx_core_module_init_conf(ngx_cycle_t *cycle, void *conf)
     if (ccf->user == (uid_t) NGX_CONF_UNSET_UINT && geteuid() == 0) {
         struct group   *grp;
         struct passwd  *pwd;
+        long int       uid;
 
         ngx_set_errno(0);
-        pwd = getpwnam(NGX_USER);
-        if (pwd == NULL) {
-            ngx_log_error(NGX_LOG_EMERG, cycle->log, ngx_errno,
-                          "getpwnam(\"" NGX_USER "\") failed");
-            return NGX_CONF_ERROR;
+        uid = strtol(NGX_USER, NULL, 10);
+        if (uid) {
+            pwd = getpwuid(uid);
+            if (pwd == NULL) {
+                ngx_log_error(NGX_LOG_EMERG, cycle->log, ngx_errno,
+                              "getpwuid(%ld) failed", uid);
+                return NGX_CONF_ERROR;
+            }
+        } else {
+            pwd = getpwnam(NGX_USER);
+            if (pwd == NULL) {
+                ngx_log_error(NGX_LOG_EMERG, cycle->log, ngx_errno,
+                              "getpwnam(\"" NGX_USER "\") failed");
+                return NGX_CONF_ERROR;
+            }
         }
+        
 
-        ccf->username = NGX_USER;
+        ccf->username = pwd->pw_name;
         ccf->user = pwd->pw_uid;
 
         ngx_set_errno(0);
@@ -1127,6 +1139,8 @@ ngx_set_user(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     struct passwd    *pwd;
     struct group     *grp;
     ngx_str_t        *value;
+    long int         uid;
+    long int         gid;
 
     if (ccf->user != (uid_t) NGX_CONF_UNSET_UINT) {
         return "is duplicate";
@@ -1145,11 +1159,21 @@ ngx_set_user(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     ccf->username = (char *) value[1].data;
 
     ngx_set_errno(0);
-    pwd = getpwnam((const char *) value[1].data);
-    if (pwd == NULL) {
-        ngx_conf_log_error(NGX_LOG_EMERG, cf, ngx_errno,
-                           "getpwnam(\"%s\") failed", value[1].data);
-        return NGX_CONF_ERROR;
+    uid = strtol((const char *) value[1].data, NULL, 10);
+    if (uid) {
+        pwd = getpwuid(uid);
+        if (pwd == NULL) {
+            ngx_conf_log_error(NGX_LOG_EMERG, cf, ngx_errno,
+                          "getpwuid(%ld) failed", uid);
+            return NGX_CONF_ERROR;
+        }
+    } else {
+        pwd = getpwnam((const char *) value[1].data);
+        if (pwd == NULL) {
+            ngx_conf_log_error(NGX_LOG_EMERG, cf, ngx_errno,
+                               "getpwnam(\"%s\") failed", value[1].data);
+            return NGX_CONF_ERROR;
+        }
     }
 
     ccf->user = pwd->pw_uid;
@@ -1157,11 +1181,21 @@ ngx_set_user(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
     group = (char *) ((cf->args->nelts == 2) ? value[1].data : value[2].data);
 
     ngx_set_errno(0);
-    grp = getgrnam(group);
-    if (grp == NULL) {
-        ngx_conf_log_error(NGX_LOG_EMERG, cf, ngx_errno,
-                           "getgrnam(\"%s\") failed", group);
-        return NGX_CONF_ERROR;
+    gid = strtol(group, NULL, 10);
+    if (gid) {
+        grp = getgrgid(gid);
+        if (grp == NULL) {
+            ngx_conf_log_error(NGX_LOG_EMERG, cf, ngx_errno,
+                               "getgrgid(%ld) failed", gid);
+            return NGX_CONF_ERROR;
+        }
+    } else {
+        grp = getgrnam(group);
+        if (grp == NULL) {
+            ngx_conf_log_error(NGX_LOG_EMERG, cf, ngx_errno,
+                               "getgrnam(\"%s\") failed", group);
+            return NGX_CONF_ERROR;
+        }
     }
 
     ccf->group = grp->gr_gid;
